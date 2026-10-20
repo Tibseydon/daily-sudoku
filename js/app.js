@@ -11,12 +11,15 @@
 
   /* =========================================================== Navigation */
 
+  let inRecovery = false;
+  const loggedIn = () => !!user && !user.needsPseudo && !inRecovery;
+
   function showView(name) {
-    if (!user) name = 'auth';
+    if (!loggedIn()) name = 'auth';
     currentView = name;
     document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === `view-${name}`));
     document.querySelectorAll('#nav [data-view]').forEach(b => b.classList.toggle('active', b.dataset.view === name));
-    document.body.classList.toggle('logged-out', !user);
+    document.body.classList.toggle('logged-out', !loggedIn());
     window.scrollTo({ top: 0 });
     if (name === 'home') renderHome();
     if (name === 'leaderboard') renderLeaderboard();
@@ -35,29 +38,168 @@
     box.innerHTML = `<span class="avatar">${esc(user.pseudo[0].toUpperCase())}</span>
       <span class="pseudo">${esc(user.pseudo)}</span>
       <button class="btn btn-ghost btn-sm" id="logoutBtn" title="Se déconnecter">⎋</button>`;
-    $('#logoutBtn').onclick = async () => { await backend.signOut(); user = null; renderUserBox(); showView('auth'); };
+    $('#logoutBtn').onclick = logout;
+  }
+
+  async function logout() {
+    await backend.signOut();
+    user = null;
+    inRecovery = false;
+    renderUserBox();
+    showAuthPanel('authForm');
+    showView('auth');
   }
 
   /* =========================================================== Connexion */
 
+  const PSEUDO_RE = /^[\p{L}\p{N}_\-. ]{3,20}$/u;
+  const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const AUTH_PANELS = ['authForm', 'authSent', 'resetForm', 'pseudoForm'];
+  const PROVIDER_UI = {
+    google: {
+      label: 'Google',
+      icon: `<svg viewBox="0 0 48 48" width="20" height="20" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>`,
+    },
+    discord: {
+      label: 'Discord',
+      icon: `<svg viewBox="0 0 127.14 96.36" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M107.7 8.07A105.15 105.15 0 0 0 81.47 0a72.06 72.06 0 0 0-3.36 6.83 97.68 97.68 0 0 0-29.11 0A72.37 72.37 0 0 0 45.64 0a105.89 105.89 0 0 0-26.25 8.09C2.79 32.65-1.71 56.6.54 80.21a105.73 105.73 0 0 0 32.17 16.15 77.7 77.7 0 0 0 6.89-11.11 68.42 68.42 0 0 1-10.85-5.18c.91-.66 1.8-1.34 2.66-2a75.57 75.57 0 0 0 64.32 0c.87.71 1.76 1.39 2.66 2a68.68 68.68 0 0 1-10.87 5.19 77 77 0 0 0 6.89 11.1 105.25 105.25 0 0 0 32.19-16.14c2.64-27.38-4.51-51.11-18.9-72.15zM42.45 65.69C36.18 65.69 31 60 31 53s5-12.74 11.43-12.74S54 46 53.89 53s-5.05 12.69-11.44 12.69zm42.24 0C78.41 65.69 73.25 60 73.25 53s5-12.74 11.44-12.74S96.23 46 96.12 53s-5.04 12.69-11.43 12.69z"/></svg>`,
+    },
+    github: {
+      label: 'GitHub',
+      icon: `<svg viewBox="0 0 16 16" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>`,
+    },
+  };
+
+  function showAuthPanel(id) {
+    AUTH_PANELS.forEach(p => $(`#${p}`).classList.toggle('hidden', p !== id));
+  }
+
+  function onLoggedIn(u) {
+    user = u;
+    renderUserBox();
+    if (user.needsPseudo) {
+      $('#pseudoForm [name=pseudo]').value = user.suggestion || '';
+      $('#pseudoError').textContent = '';
+      showAuthPanel('pseudoForm');
+      showView('auth');
+    } else {
+      showView('home');
+    }
+  }
+
+  /* Liste des règles de mot de passe, mise à jour à chaque frappe. */
+  function bindPolicy(form, box, context) {
+    const pw = form.querySelector('[name=password]'), cf = form.querySelector('[name=confirm]');
+    let failed = false;
+    const render = () => {
+      const r = Password.check(pw.value, { confirm: cf.value, ...context() });
+      const idle = !pw.value;
+      const seg = [1, 2, 3, 4].map(k => `<i class="${!idle && r.score >= k ? 'on' : ''}"></i>`).join('');
+      box.innerHTML = `<div class="pw-meter s${idle ? 0 : r.score}">${seg}<span>${idle ? 'Robustesse' : r.level}</span></div>
+        <ul class="pw-rules${idle ? ' idle' : ''}">${r.rules.map(x => {
+          const st = failed && x.id === 'words' ? 'ko' : x.ok === true ? 'ok' : x.ok === false ? 'ko' : 'wait';
+          const label = failed && x.id === 'words' ? 'Dictionnaires indisponibles : recharge la page' : x.label;
+          return `<li class="${st}">${esc(label)}</li>`;
+        }).join('')}</ul>`;
+      return r;
+    };
+    pw.addEventListener('input', render);
+    cf.addEventListener('input', render);
+    render();
+    const load = () => Password.load().then(render, () => { failed = true; render(); });
+    return { render, load };
+  }
+
+  function fillGenerated(form, policy) {
+    Password.load().then(() => {
+      const pw = Password.generate();
+      if (!pw) return UI.toast('Réessaie la génération', 'error');
+      form.querySelectorAll('[name=password], [name=confirm]').forEach(i => { i.value = pw; i.type = 'text'; });
+      form.querySelectorAll('.pw-eye').forEach(b => (b.textContent = '🙈'));
+      policy.render();
+      UI.toast('Mot de passe généré : enregistre-le dans ton gestionnaire de mots de passe 🔐');
+    }, () => UI.toast('Dictionnaires indisponibles : recharge la page', 'error'));
+  }
+
+  /* Vérifie la politique + les fuites connues avant d'envoyer un nouveau mot de passe. */
+  async function passwordProblem(policy, password) {
+    const r = policy.render();
+    if (!r.ready) return 'Patiente une seconde : chargement des dictionnaires…';
+    if (!r.valid) return 'Le mot de passe ne respecte pas encore toutes les règles ci-dessus.';
+    const leaks = await Password.breachCount(password);
+    if (leaks) return `Ce mot de passe apparaît dans ${leaks.toLocaleString('fr-FR')} fuite(s) de données connues : choisis-en un autre.`;
+    return null;
+  }
+
+  let sentCtx = null;
+  let resendTimer = null;
+  function showSent(kind, email) {
+    sentCtx = { kind, email };
+    $('#sentTitle').textContent = kind === 'reset' ? 'Lien envoyé !' : 'Vérifie ta boîte mail';
+    $('#sentText').innerHTML = kind === 'reset'
+      ? `Si un compte existe pour <b>${esc(email)}</b>, tu vas recevoir un lien pour choisir un nouveau mot de passe.`
+      : `Un lien de confirmation a été envoyé à <b>${esc(email)}</b>. Clique dessus pour activer ton compte, et tu seras connecté automatiquement.`;
+    showAuthPanel('authSent');
+    startResendCooldown();
+  }
+  function startResendCooldown(seconds = 60) {
+    const btn = $('#resendBtn');
+    clearInterval(resendTimer);
+    let left = seconds;
+    const upd = () => {
+      btn.disabled = left > 0;
+      btn.textContent = left > 0 ? `Renvoyer l'email (${left} s)` : "Renvoyer l'email";
+      if (left-- <= 0) clearInterval(resendTimer);
+    };
+    upd();
+    resendTimer = setInterval(upd, 1000);
+  }
+
   let authTab = 'signin';
   function setupAuth() {
     const demo = backend.mode === 'demo';
-    $('#authTabs').classList.toggle('hidden', demo);
+    const form = $('#authForm');
+    const err = $('#authError');
+    const signupPolicy = bindPolicy(form, $('#signupPolicy'), () => ({
+      pseudo: form.querySelector('[name=pseudo]').value, email: form.querySelector('[name=email]').value,
+    }));
+
     const apply = () => {
       const mode = demo ? 'demo' : authTab;
-      document.querySelectorAll('#authForm [data-only]').forEach(f => {
-        const on = f.dataset.only.split(' ').includes(mode);
-        f.classList.toggle('hidden', !on);
-        f.querySelector('input').required = on;
-      });
+      form.querySelectorAll('[data-only]').forEach(el => el.classList.toggle('hidden', !el.dataset.only.split(' ').includes(mode)));
       document.querySelectorAll('#authTabs button').forEach(b => b.classList.toggle('active', b.dataset.tab === authTab));
-      $('#authForm [name=password]').autocomplete = authTab === 'signup' ? 'new-password' : 'current-password';
-      $('#authSubmit').textContent = demo ? "C'est parti ! 🚀" : authTab === 'signup' ? 'Créer mon compte ✨' : 'Me connecter 🚀';
-      $('#authError').textContent = '';
+      form.querySelector('[name=password]').autocomplete = authTab === 'signup' ? 'new-password' : 'current-password';
+      $('#authSubmit').textContent = demo ? "C'est parti ! 🚀"
+        : { signin: 'Me connecter 🚀', signup: 'Créer mon compte ✨', forgot: 'Envoyer le lien 📧' }[authTab];
+      err.textContent = '';
+      if (mode === 'signup') signupPolicy.load();
     };
-    $('#authTabs').onclick = e => { const t = e.target.closest('[data-tab]'); if (t) { authTab = t.dataset.tab; apply(); } };
+    const setTab = tab => { authTab = tab; showAuthPanel('authForm'); apply(); };
+    $('#authTabs').onclick = e => { const t = e.target.closest('[data-tab]'); if (t) setTab(t.dataset.tab); };
+    $('#forgotLink').onclick = () => setTab('forgot');
+    $('#backToSignin').onclick = () => setTab('signin');
+    $('#sentBack').onclick = () => setTab('signin');
+    $('#genPw').onclick = () => fillGenerated(form, signupPolicy);
+    document.querySelectorAll('.pw-eye').forEach(b => (b.onclick = () => {
+      const input = b.previousElementSibling;
+      input.type = input.type === 'password' ? 'text' : 'password';
+      b.textContent = input.type === 'password' ? '👁' : '🙈';
+    }));
     apply();
+
+    // Boutons Google / Discord / GitHub (uniquement ceux activés dans Supabase)
+    backend.providers().then(list => {
+      $('#oauthBox').classList.toggle('empty', !list.length);
+      $('#oauthButtons').innerHTML = list.map(p => `<button type="button" class="oauth-btn ${p}" data-provider="${p}">
+        ${PROVIDER_UI[p].icon}<span>Continuer avec ${PROVIDER_UI[p].label}</span></button>`).join('');
+    });
+    $('#oauthButtons').onclick = async e => {
+      const b = e.target.closest('[data-provider]');
+      if (!b) return;
+      b.disabled = true;
+      try { await backend.signInWithProvider(b.dataset.provider); }
+      catch (ex) { err.textContent = ex.message; b.disabled = false; }
+    };
 
     // Mini grille décorative
     const mini = $('.mini-board');
@@ -67,36 +209,99 @@
       return `<i style="${show ? `color:${colors[i % 4]}` : ''}">${show ? ((i * 5) % 9) + 1 : ''}</i>`;
     }).join('');
 
-    $('#authForm').onsubmit = async e => {
+    form.onsubmit = async e => {
       e.preventDefault();
-      const f = new FormData(e.target);
+      const f = new FormData(form);
       const pseudo = (f.get('pseudo') || '').trim();
       const email = (f.get('email') || '').trim();
       const password = f.get('password') || '';
-      const err = $('#authError');
-      if ((demo || authTab === 'signup') && !/^[\p{L}\p{N}_\-. ]{3,20}$/u.test(pseudo)) {
+      const mode = demo ? 'demo' : authTab;
+      err.textContent = '';
+      if ((mode === 'demo' || mode === 'signup') && !PSEUDO_RE.test(pseudo)) {
         err.textContent = 'Pseudo : 3 à 20 caractères (lettres, chiffres, _ - .)';
         return;
       }
+      if (mode !== 'demo' && !EMAIL_RE.test(email)) { err.textContent = 'Adresse email invalide'; return; }
+      if (mode === 'signin' && !password) { err.textContent = 'Entre ton mot de passe'; return; }
       $('#authSubmit').disabled = true;
       try {
-        const res = demo ? await backend.signIn({ pseudo })
-          : authTab === 'signup' ? await backend.signUp({ email, password, pseudo })
+        if (mode === 'signup') {
+          const problem = await passwordProblem(signupPolicy, password);
+          if (problem) { err.textContent = problem; return; }
+        }
+        if (mode === 'forgot') {
+          await backend.sendPasswordReset(email);
+          showSent('reset', email);
+          return;
+        }
+        const res = mode === 'demo' ? await backend.signIn({ pseudo })
+          : mode === 'signup' ? await backend.signUp({ email, password, pseudo })
           : await backend.signIn({ email, password });
         if (res?.needsConfirm) {
-          err.textContent = '📬 Compte créé ! Clique sur le lien reçu par email puis connecte-toi.';
-          authTab = 'signin';
+          form.reset();
+          signupPolicy.render();
+          showSent('signup', email);
         } else {
-          user = res;
-          renderUserBox();
-          showView('home');
+          form.reset();
+          onLoggedIn(res);
         }
       } catch (ex) {
-        err.textContent = ex.message;
+        // Compte pas encore confirmé : on propose directement de renvoyer l'email
+        if (/Confirme ton email/.test(ex.message)) showSent('signup', email);
+        else err.textContent = ex.message;
       } finally {
         $('#authSubmit').disabled = false;
       }
     };
+
+    $('#resendBtn').onclick = async () => {
+      if (!sentCtx) return;
+      try {
+        if (sentCtx.kind === 'reset') await backend.sendPasswordReset(sentCtx.email);
+        else await backend.resendConfirmation(sentCtx.email);
+        UI.toast('Email renvoyé 📬');
+        startResendCooldown();
+      } catch (ex) {
+        UI.toast(ex.message, 'error');
+      }
+    };
+
+    // Nouveau mot de passe après un lien "mot de passe oublié"
+    const reset = $('#resetForm');
+    const resetPolicy = bindPolicy(reset, $('#resetPolicy'), () => ({ email: user?.email || '', pseudo: user?.pseudo || '' }));
+    $('#genPwReset').onclick = () => fillGenerated(reset, resetPolicy);
+    reset.onsubmit = async e => {
+      e.preventDefault();
+      const password = reset.querySelector('[name=password]').value;
+      const rerr = $('#resetError');
+      rerr.textContent = '';
+      $('#resetSubmit').disabled = true;
+      try {
+        const problem = await passwordProblem(resetPolicy, password);
+        if (problem) { rerr.textContent = problem; return; }
+        await backend.updatePassword(password);
+        reset.reset();
+        inRecovery = false;
+        UI.toast('Mot de passe mis à jour ✅');
+        onLoggedIn(user);
+      } catch (ex) {
+        rerr.textContent = ex.message;
+      } finally {
+        $('#resetSubmit').disabled = false;
+      }
+    };
+    reset.startRecovery = () => { showAuthPanel('resetForm'); resetPolicy.load(); };
+
+    // Choix du pseudo (première connexion sociale)
+    $('#pseudoForm').onsubmit = async e => {
+      e.preventDefault();
+      const pseudo = $('#pseudoForm [name=pseudo]').value.trim();
+      const perr = $('#pseudoError');
+      if (!PSEUDO_RE.test(pseudo)) { perr.textContent = 'Pseudo : 3 à 20 caractères (lettres, chiffres, _ - .)'; return; }
+      try { onLoggedIn(await backend.setPseudo(pseudo)); }
+      catch (ex) { perr.textContent = ex.message; }
+    };
+    $('#pseudoLogout').onclick = logout;
   }
 
   /* =========================================================== Accueil */
@@ -664,8 +869,19 @@
     buildNumpad();
     setupAuth();
     try { user = await backend.init(); } catch (e) { UI.toast(e.message, 'error'); }
-    renderUserBox();
-    showView(user ? 'home' : 'auth');
+    if (backend.urlError) $('#authError').textContent = backend.urlError;
+    if (user && backend.recovery) {
+      // Arrivée par le lien "mot de passe oublié" : on impose le choix d'un nouveau mot de passe
+      inRecovery = true;
+      renderUserBox();
+      $('#resetForm').startRecovery();
+      showView('auth');
+    } else if (user) {
+      onLoggedIn(user);
+    } else {
+      renderUserBox();
+      showView('auth');
+    }
     updateCountdown();
     setInterval(updateCountdown, 1000);
     setInterval(tick, 250);

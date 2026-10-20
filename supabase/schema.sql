@@ -13,8 +13,10 @@
 create table if not exists public.profiles (
   id         uuid primary key references auth.users(id) on delete cascade,
   pseudo     text not null check (char_length(pseudo) between 3 and 20),
+  pseudo_chosen boolean not null default false,   -- faux tant qu'un joueur Google/Discord/GitHub n'a pas choisi son pseudo
   created_at timestamptz not null default now()
 );
+alter table public.profiles add column if not exists pseudo_chosen boolean not null default false;
 create unique index if not exists profiles_pseudo_lower on public.profiles (lower(pseudo));
 
 create table if not exists public.puzzles (
@@ -60,9 +62,17 @@ create policy "parties lisibles" on public.games for select using (true);
 
 create or replace function public.handle_new_user() returns trigger
 language plpgsql security definer set search_path = public as $$
+declare
+  v_pseudo text := nullif(trim(new.raw_user_meta_data->>'pseudo'), '');
 begin
-  insert into public.profiles (id, pseudo)
-  values (new.id, coalesce(nullif(trim(new.raw_user_meta_data->>'pseudo'), ''), 'joueur_' || substr(new.id::text, 1, 8)));
+  if v_pseudo ~ '^[[:alnum:]_. -]{3,20}$'
+     and not exists (select 1 from public.profiles where lower(pseudo) = lower(v_pseudo)) then
+    insert into public.profiles (id, pseudo, pseudo_chosen) values (new.id, v_pseudo, true);
+  else
+    -- Connexion sociale (ou pseudo pris entre-temps) : pseudo provisoire, à choisir dans le jeu
+    insert into public.profiles (id, pseudo, pseudo_chosen)
+    values (new.id, 'joueur_' || substr(replace(new.id::text, '-', ''), 1, 8), false);
+  end if;
   return new;
 end $$;
 
@@ -228,10 +238,29 @@ language sql stable security definer set search_path = public as $$
    order by g.day desc, g.level;
 $$;
 
+-- ---------- Choix du pseudo (joueurs Google / Discord / GitHub) --------
+
+create or replace function public.set_pseudo(p_pseudo text) returns text
+language plpgsql security definer set search_path = public as $$
+declare
+  v text := trim(p_pseudo);
+begin
+  if auth.uid() is null then raise exception 'Non connecté'; end if;
+  if v is null or v !~ '^[[:alnum:]_. -]{3,20}$' then
+    raise exception 'Pseudo invalide : 3 à 20 caractères (lettres, chiffres, _ - .)';
+  end if;
+  if exists (select 1 from public.profiles where lower(pseudo) = lower(v) and id <> auth.uid()) then
+    raise exception 'Ce pseudo est déjà pris 😕';
+  end if;
+  insert into public.profiles (id, pseudo, pseudo_chosen) values (auth.uid(), v, true)
+    on conflict (id) do update set pseudo = excluded.pseudo, pseudo_chosen = true;
+  return v;
+end $$;
+
 -- ---------- Droits ------------------------------------------------------
 
 grant select on public.profiles, public.puzzles, public.games to anon, authenticated;
 grant execute on function public.pseudo_available(text), public.leaderboard(date, int), public.paris_today()
   to anon, authenticated;
 grant execute on function public.start_game(int, text), public.use_hint(date, int, int, int[]),
-  public.finish_game(date, int, text), public.my_games() to authenticated;
+  public.finish_game(date, int, text), public.my_games(), public.set_pseudo(text) to authenticated;

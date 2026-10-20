@@ -35,19 +35,53 @@ Pour le Laser, clique sur une case vide pour viser sa ligne, puis reclique sur l
 
 1. Crée un compte sur [supabase.com](https://supabase.com), puis un **nouveau projet** (région Europe, par exemple Paris ou Francfort).
 2. Ouvre **SQL Editor → New query**, colle tout le contenu de [`supabase/schema.sql`](supabase/schema.sql), puis clique sur **Run**.
+   Si ta base a été créée avant l'ajout de la connexion sociale, exécute aussi [`supabase/migrations/002_connexion_sociale.sql`](supabase/migrations/002_connexion_sociale.sql).
 3. Dans **Project Settings → API**, récupère :
    - le **Project URL** (`https://xxxx.supabase.co`) ;
    - la clé publique **anon / publishable**. N'utilise jamais la clé `service_role` ni la clé `secret`.
 4. Colle ces deux valeurs dans [`js/config.js`](js/config.js).
-5. (Optionnel) **Authentication → Sign In / Providers → Email** : tu peux désactiver *Confirm email* pour que les joueurs jouent sans confirmer leur email.
-6. **Authentication → URL Configuration** : mets l'adresse de ton site dans *Site URL* (par exemple `https://<ton-pseudo>.github.io/sudoku-du-jour/`). C'est là que pointent les liens de confirmation par email.
+5. **Authentication → URL Configuration** :
+   - *Site URL* : `https://tibseydon.github.io/daily-sudoku/` ;
+   - *Redirect URLs* : ajoute `https://tibseydon.github.io/daily-sudoku/` et `http://localhost:8080/` (pour tester en local).
+6. **Authentication → Sign In / Providers → Email** : laisse **Confirm email** activé (obligatoire pour la politique de sécurité). Dans la section **Password**, règle :
+   - *Minimum password length* : `12` ;
+   - *Password requirements* : **Lowercase, uppercase letters, digits and symbols**.
+
+   Ainsi, le serveur refuse lui aussi les mots de passe faibles, même si quelqu'un contourne le site.
 
 > La clé publique est faite pour être visible dans le code du site. La sécurité repose sur les règles RLS du schéma : un joueur ne peut rien écrire directement. Le chrono, les pénalités et la vérification de la grille sont gérés par le serveur.
+
+### Connexion Google, Discord et GitHub
+
+Chaque bouton n'apparaît sur le site que lorsque le fournisseur est activé dans Supabase (**Authentication → Sign In / Providers**). Pour chacun, il faut créer une « application OAuth » chez le fournisseur avec cette **URL de redirection (callback)** :
+
+```
+https://yirqnldregtrbigwdmid.supabase.co/auth/v1/callback
+```
+
+Colle ensuite le *Client ID* et le *Client Secret* obtenus dans le fournisseur correspondant de Supabase, puis active-le.
+
+| Fournisseur | Où créer l'application |
+|---|---|
+| **GitHub** | [github.com/settings/developers](https://github.com/settings/developers) → *New OAuth App*. Homepage : `https://tibseydon.github.io/daily-sudoku/`. Callback : l'URL ci-dessus. *Generate a new client secret*. |
+| **Discord** | [discord.com/developers/applications](https://discord.com/developers/applications) → *New Application* → *OAuth2* → *Add Redirect* : l'URL ci-dessus. Copie *Client ID* et *Client Secret*. |
+| **Google** | [console.cloud.google.com](https://console.cloud.google.com) → *APIs & Services* → *OAuth consent screen* (External), puis *Credentials* → *Create credentials* → *OAuth client ID* → *Web application*. *Authorized JavaScript origins* : `https://tibseydon.github.io`. *Authorized redirect URIs* : l'URL ci-dessus. |
+
+À la première connexion par l'un de ces fournisseurs, le joueur choisit son pseudo (une suggestion est proposée à partir de son profil).
+
+### Sécurité des mots de passe (inscription par email)
+
+- 12 caractères minimum, avec au moins 1 majuscule, 1 minuscule, 1 chiffre et 1 caractère spécial.
+- Aucun mot des dictionnaires français et anglais : mots courants, Wikipédia, 50 000 mots de passe courants, liste Diceware. Le contrôle vaut aussi pour un mot écrit en leetspeak (`S0l3il`), à l'envers ou caché au milieu du mot de passe.
+- Ni le pseudo ni l'email dans le mot de passe, et une robustesse zxcvbn « forte » au minimum.
+- Refus des mots de passe déjà apparus dans une fuite de données ([Have I Been Pwned](https://haveibeenpwned.com/Passwords), en k-anonymat : le mot de passe ne quitte jamais le navigateur).
+- Confirmation obligatoire par email, avec un bouton pour renvoyer l'email et une procédure de mot de passe oublié soumise aux mêmes règles.
+- Un générateur propose un mot de passe aléatoire qui respecte toutes les règles.
 
 ### 2. Hébergement : GitHub Pages
 
 Dans le dépôt GitHub : **Settings → Pages → Build and deployment → Deploy from a branch → `main` / `(root)`**.
-Le site sera ensuite disponible à l'adresse `https://<ton-pseudo>.github.io/<nom-du-depot>/`.
+Le site est en ligne à l'adresse **https://tibseydon.github.io/daily-sudoku/**.
 
 ## 🧪 Mode démo
 
@@ -68,11 +102,13 @@ index.html            Page unique (toutes les vues)
 css/style.css         Thème visuel
 js/config.js          Clés Supabase (vide = mode démo)
 js/rules.js           Niveaux, indices, paliers de médailles
+js/password.js        Politique de mot de passe (dictionnaires, fuites, générateur)
 js/sudoku.js          Génération déterministe, solveur, vérification
 js/backend.js         Supabase + mode démo (même interface)
 js/ui.js              Médailles/trophées SVG, confettis, graphique
 js/app.js             Navigation, jeu, classement, historique
 supabase/schema.sql   Tables, sécurité RLS, fonctions serveur
+supabase/migrations/  Mises à jour à appliquer sur une base existante
 ```
 
 ## ⚙️ Fonctionnement

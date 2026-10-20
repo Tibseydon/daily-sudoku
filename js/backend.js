@@ -8,38 +8,109 @@ function parisToday(date = new Date()) {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Paris', year: 'numeric', month: '2-digit', day: '2-digit' }).format(date);
 }
 
+// Adresse de retour après un lien email ou une connexion Google / Discord / GitHub
+const redirectUrl = () => location.origin + location.pathname;
+
+// Fournisseurs de connexion sociale affichés (dans cet ordre) quand ils sont activés dans Supabase
+const OAUTH_PROVIDERS = ['google', 'discord', 'github'];
+
 class SupabaseBackend {
   constructor(url, key) {
     this.mode = 'online';
-    this.sb = window.supabase.createClient(url, key);
+    this.url = url;
+    this.key = key;
+    // Flux "implicit" : les liens reçus par email fonctionnent même s'ils sont ouverts sur un autre appareil
+    this.sb = window.supabase.createClient(url, key, { auth: { flowType: 'implicit', detectSessionInUrl: true, persistSession: true } });
     this.user = null;
+    this.recovery = /type=recovery/.test(location.hash + location.search);
+    this.urlError = readUrlError();
+    this.sb.auth.onAuthStateChange(event => { if (event === 'PASSWORD_RECOVERY') this.recovery = true; });
   }
 
   async init() {
     const { data } = await this.sb.auth.getSession();
+    // Nettoie l'URL (jetons ou erreurs renvoyés par un lien email / OAuth)
+    if (/access_token|error|type=/.test(location.hash) || /[?&](code|error)=/.test(location.search)) {
+      history.replaceState(null, '', location.pathname);
+    }
     if (!data.session) return null;
     return this._loadProfile(data.session.user);
   }
 
   async _loadProfile(authUser) {
-    const { data } = await this.sb.from('profiles').select('pseudo').eq('id', authUser.id).maybeSingle();
-    this.user = { id: authUser.id, pseudo: data?.pseudo || authUser.user_metadata?.pseudo || 'Joueur' };
+    let { data, error } = await this.sb.from('profiles').select('pseudo, pseudo_chosen').eq('id', authUser.id).maybeSingle();
+    if (error) {
+      // Base pas encore migrée (colonne pseudo_chosen absente) : on considère le pseudo comme choisi
+      ({ data } = await this.sb.from('profiles').select('pseudo').eq('id', authUser.id).maybeSingle());
+      if (data) data.pseudo_chosen = true;
+    }
+    this.user = {
+      id: authUser.id,
+      email: authUser.email,
+      pseudo: data?.pseudo || 'Joueur',
+      needsPseudo: !data || data.pseudo_chosen === false,
+      suggestion: suggestPseudo(authUser),
+    };
     return this.user;
+  }
+
+  async providers() {
+    try {
+      const res = await fetch(`${this.url}/auth/v1/settings`, { headers: { apikey: this.key } });
+      const { external = {} } = await res.json();
+      return OAUTH_PROVIDERS.filter(p => external[p]);
+    } catch {
+      return [];
+    }
+  }
+
+  async signInWithProvider(provider) {
+    const { error } = await this.sb.auth.signInWithOAuth({ provider, options: { redirectTo: redirectUrl() } });
+    if (error) throw new Error(translateAuthError(error));
   }
 
   async signUp({ email, password, pseudo }) {
     const free = await this._rpc('pseudo_available', { p_pseudo: pseudo });
     if (!free) throw new Error('Ce pseudo est déjà pris 😕');
-    const { data, error } = await this.sb.auth.signUp({ email, password, options: { data: { pseudo } } });
-    if (error) throw new Error(translateAuthError(error.message));
+    const { data, error } = await this.sb.auth.signUp({
+      email, password, options: { data: { pseudo }, emailRedirectTo: redirectUrl() },
+    });
+    if (error) throw new Error(translateAuthError(error));
     if (!data.session) return { needsConfirm: true };
     return this._loadProfile(data.user);
   }
 
+  async resendConfirmation(email) {
+    const { error } = await this.sb.auth.resend({ type: 'signup', email, options: { emailRedirectTo: redirectUrl() } });
+    if (error) throw new Error(translateAuthError(error));
+  }
+
   async signIn({ email, password }) {
     const { data, error } = await this.sb.auth.signInWithPassword({ email, password });
-    if (error) throw new Error(translateAuthError(error.message));
+    if (error) throw new Error(translateAuthError(error));
     return this._loadProfile(data.user);
+  }
+
+  async sendPasswordReset(email) {
+    const { error } = await this.sb.auth.resetPasswordForEmail(email, { redirectTo: redirectUrl() });
+    if (error) throw new Error(translateAuthError(error));
+  }
+
+  async updatePassword(password) {
+    const { error } = await this.sb.auth.updateUser({ password });
+    if (error) throw new Error(translateAuthError(error));
+    this.recovery = false;
+  }
+
+  async setPseudo(pseudo) {
+    try {
+      this.user.pseudo = await this._rpc('set_pseudo', { p_pseudo: pseudo });
+    } catch (e) {
+      if (/set_pseudo/.test(e.message)) throw new Error('Base de données à mettre à jour : exécute supabase/migrations/002_connexion_sociale.sql');
+      throw e;
+    }
+    this.user.needsPseudo = false;
+    return this.user;
   }
 
   async signOut() { await this.sb.auth.signOut(); this.user = null; }
@@ -81,14 +152,40 @@ class SupabaseBackend {
   }
 }
 
-function translateAuthError(msg) {
-  const m = msg.toLowerCase();
-  if (m.includes('invalid login')) return 'Email ou mot de passe incorrect';
-  if (m.includes('already registered')) return 'Un compte existe déjà avec cet email';
-  if (m.includes('password')) return 'Mot de passe trop faible (6 caractères minimum)';
-  if (m.includes('email not confirmed')) return 'Confirme ton email avant de te connecter 📬';
-  if (m.includes('rate limit')) return 'Trop de tentatives, réessaie dans quelques minutes';
-  return msg;
+function translateAuthError(err) {
+  const code = err.code || '';
+  const m = (err.message || String(err)).toLowerCase();
+  if (code === 'invalid_credentials' || m.includes('invalid login')) return 'Email ou mot de passe incorrect';
+  if (code === 'email_not_confirmed' || m.includes('email not confirmed')) return 'Confirme ton email avant de te connecter : clique sur le lien reçu 📬';
+  if (code === 'user_already_exists' || m.includes('already registered')) return 'Un compte existe déjà avec cet email';
+  if (code === 'same_password') return "Le nouveau mot de passe doit être différent de l'ancien";
+  if (code === 'weak_password' || m.includes('password should')) return 'Mot de passe refusé : il ne respecte pas les règles de sécurité';
+  if (code === 'email_address_invalid' || m.includes('invalid format')) return 'Adresse email invalide';
+  if (code === 'provider_disabled' || m.includes('provider is not enabled')) return "Ce mode de connexion n'est pas encore activé";
+  if (code.includes('rate_limit') || m.includes('rate limit')) return 'Trop de tentatives, réessaie dans quelques minutes';
+  return err.message || String(err);
+}
+
+// Erreur renvoyée dans l'URL par un lien email expiré ou une connexion sociale annulée
+function readUrlError() {
+  const params = new URLSearchParams(location.hash.slice(1) + '&' + location.search.slice(1));
+  const desc = params.get('error_description');
+  if (!desc) return null;
+  if (/expired|invalid/i.test(desc)) return 'Ce lien a expiré ou a déjà été utilisé. Demande-en un nouveau.';
+  if (/denied|cancel/i.test(desc)) return 'Connexion annulée.';
+  return desc.replace(/\+/g, ' ');
+}
+
+// Propose un pseudo à partir du profil Google / Discord / GitHub
+function suggestPseudo(authUser) {
+  const meta = authUser.user_metadata || {};
+  const candidates = [meta.pseudo, meta.user_name, meta.preferred_username, meta.custom_claims?.global_name,
+    meta.full_name, meta.name, authUser.email?.split('@')[0]];
+  for (const c of candidates) {
+    const clean = String(c || '').replace(/[^\p{L}\p{N}_\-. ]/gu, '').trim().slice(0, 20);
+    if (clean.length >= 3) return clean;
+  }
+  return '';
 }
 
 /* ---------------------------------------------------------------- Mode démo */
@@ -121,6 +218,7 @@ class LocalBackend {
   }
   async signUp(args) { return this.signIn(args); }
   async signOut() { this.user = this.state.user = null; this._save(); }
+  async providers() { return []; }
 
   _out(g) { return { ...g, hints: [...g.hints], revealed: [...g.revealed], serverNow: Date.now() }; }
 

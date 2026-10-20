@@ -42,20 +42,75 @@
           <h1>Une nouvelle grille<br><span class="rainbow">chaque jour</span></h1>
           <p>4 niveaux, du 🌱 facile au 💀 extrême. Sois le plus rapide et décroche les trophées !</p>
         </div>
-        <form id="authForm" class="auth-form" autocomplete="on">
-          <div class="tabs" id="authTabs">
-            <button type="button" data-tab="signin" class="active">Connexion</button>
-            <button type="button" data-tab="signup">Créer un compte</button>
+        <div class="auth-panel">
+          <!-- Connexion / inscription -->
+          <form id="authForm" class="auth-form" autocomplete="on" novalidate>
+            <div class="oauth hidden" id="oauthBox" data-only="signin signup">
+              <div class="oauth-buttons" id="oauthButtons"></div>
+              <div class="sep"><span>ou avec ton email</span></div>
+            </div>
+            <div class="tabs" id="authTabs" data-only="signin signup">
+              <button type="button" data-tab="signin" class="active">Connexion</button>
+              <button type="button" data-tab="signup">Créer un compte</button>
+            </div>
+            <div class="forgot-head" data-only="forgot">
+              <h3>🔑 Mot de passe oublié</h3>
+              <p class="muted small">Indique ton email : tu recevras un lien pour choisir un nouveau mot de passe.</p>
+            </div>
+            <label class="field" data-only="signup demo"><span>Pseudo</span>
+              <input name="pseudo" minlength="3" maxlength="20" placeholder="SudoMaster" autocomplete="nickname"></label>
+            <label class="field" data-only="signin signup forgot"><span>Email</span>
+              <input name="email" type="email" placeholder="toi@exemple.fr" autocomplete="email"></label>
+            <label class="field" data-only="signin signup"><span>Mot de passe</span>
+              <span class="pw-wrap"><input name="password" type="password" placeholder="••••••••••••" autocomplete="current-password">
+              <button type="button" class="pw-eye" aria-label="Afficher le mot de passe">👁</button></span></label>
+            <label class="field" data-only="signup"><span>Confirme le mot de passe</span>
+              <span class="pw-wrap"><input name="confirm" type="password" placeholder="••••••••••••" autocomplete="new-password">
+              <button type="button" class="pw-eye" aria-label="Afficher le mot de passe">👁</button></span></label>
+            <div class="pw-policy" data-only="signup" id="signupPolicy"></div>
+            <button type="button" class="link-btn" id="genPw" data-only="signup">🎲 Générer un mot de passe ultra-solide</button>
+            <button type="button" class="link-btn right" id="forgotLink" data-only="signin">Mot de passe oublié ?</button>
+            <p class="form-error" id="authError" role="alert"></p>
+            <button class="btn btn-primary btn-lg" type="submit" id="authSubmit">C'est parti ! 🚀</button>
+            <button type="button" class="link-btn center" id="backToSignin" data-only="forgot">← Retour à la connexion</button>
+          </form>
+
+          <!-- Email envoyé (confirmation d'inscription ou réinitialisation) -->
+          <div class="auth-sent hidden" id="authSent">
+            <div class="big-emoji">📬</div>
+            <h3 id="sentTitle">Vérifie ta boîte mail</h3>
+            <p id="sentText"></p>
+            <p class="muted small">Pense à regarder dans les spams. Le lien est valable 24 h.</p>
+            <button class="btn btn-ghost" id="resendBtn">Renvoyer l'email</button>
+            <button type="button" class="link-btn center" id="sentBack">← Retour à la connexion</button>
           </div>
-          <label class="field" data-only="signup demo"><span>Pseudo</span>
-            <input name="pseudo" minlength="3" maxlength="20" placeholder="SudoMaster" autocomplete="nickname"></label>
-          <label class="field" data-only="signin signup"><span>Email</span>
-            <input name="email" type="email" placeholder="toi@exemple.fr" autocomplete="email"></label>
-          <label class="field" data-only="signin signup"><span>Mot de passe</span>
-            <input name="password" type="password" minlength="6" placeholder="••••••••" autocomplete="current-password"></label>
-          <p class="form-error" id="authError" role="alert"></p>
-          <button class="btn btn-primary btn-lg" type="submit" id="authSubmit">C'est parti ! 🚀</button>
-        </form>
+
+          <!-- Nouveau mot de passe (après le lien "mot de passe oublié") -->
+          <form class="auth-form hidden" id="resetForm" novalidate>
+            <h3>🔐 Nouveau mot de passe</h3>
+            <label class="field"><span>Nouveau mot de passe</span>
+              <span class="pw-wrap"><input name="password" type="password" autocomplete="new-password" required>
+              <button type="button" class="pw-eye" aria-label="Afficher le mot de passe">👁</button></span></label>
+            <label class="field"><span>Confirmation</span>
+              <span class="pw-wrap"><input name="confirm" type="password" autocomplete="new-password" required>
+              <button type="button" class="pw-eye" aria-label="Afficher le mot de passe">👁</button></span></label>
+            <div class="pw-policy" id="resetPolicy"></div>
+            <button type="button" class="link-btn" id="genPwReset">🎲 Générer un mot de passe ultra-solide</button>
+            <p class="form-error" id="resetError" role="alert"></p>
+            <button class="btn btn-primary btn-lg" type="submit" id="resetSubmit">Enregistrer 🔒</button>
+          </form>
+
+          <!-- Choix du pseudo (première connexion Google / Discord / GitHub) -->
+          <form class="auth-form hidden" id="pseudoForm" novalidate>
+            <h3>👋 Bienvenue !</h3>
+            <p class="muted">Choisis le pseudo qui apparaîtra dans les classements.</p>
+            <label class="field"><span>Pseudo</span>
+              <input name="pseudo" minlength="3" maxlength="20" placeholder="SudoMaster" autocomplete="nickname" required></label>
+            <p class="form-error" id="pseudoError" role="alert"></p>
+            <button class="btn btn-primary btn-lg" type="submit">C'est parti ! 🚀</button>
+            <button type="button" class="link-btn center" id="pseudoLogout">Se déconnecter</button>
+          </form>
+        </div>
       </div>
     </section>
 
@@ -201,6 +256,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.js"></script>
   <script src="js/config.js"></script>
   <script src="js/rules.js"></script>
+  <script src="js/password.js"></script>
   <script src="js/sudoku.js"></script>
   <script src="js/backend.js"></script>
   <script src="js/ui.js"></script>
