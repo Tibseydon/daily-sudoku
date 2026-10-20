@@ -11,8 +11,8 @@ function parisToday(date = new Date()) {
 // Adresse de retour après un lien email ou une connexion Google / Discord / GitHub
 const redirectUrl = () => location.origin + location.pathname;
 
-// Fournisseurs de connexion sociale affichés (dans cet ordre) quand ils sont activés dans Supabase
-const OAUTH_PROVIDERS = ['google', 'discord', 'github'];
+// Fournisseurs de connexion sociale affichés quand ils sont activés dans Supabase
+const OAUTH_PROVIDERS = ['google'];
 
 class SupabaseBackend {
   constructor(url, key) {
@@ -169,11 +169,15 @@ function translateAuthError(err) {
 // Erreur renvoyée dans l'URL par un lien email expiré ou une connexion sociale annulée
 function readUrlError() {
   const params = new URLSearchParams(location.hash.slice(1) + '&' + location.search.slice(1));
-  const desc = params.get('error_description');
-  if (!desc) return null;
-  if (/expired|invalid/i.test(desc)) return 'Ce lien a expiré ou a déjà été utilisé. Demande-en un nouveau.';
-  if (/denied|cancel/i.test(desc)) return 'Connexion annulée.';
-  return desc.replace(/\+/g, ' ');
+  const desc = (params.get('error_description') || '').replace(/\+/g, ' ');
+  const code = params.get('error_code') || params.get('error') || '';
+  if (!desc && !code) return null;
+  console.warn('[auth] retour en erreur :', code, desc);
+  if (/exchange external code/i.test(desc)) return 'Google a refusé la connexion : le Client Secret enregistré dans Supabase est probablement incorrect.';
+  if (/saving new user|database error/i.test(desc)) return 'Erreur de la base de données à la création du compte. Réessaie dans un instant.';
+  if (/expired|otp/i.test(desc + code)) return 'Ce lien a expiré ou a déjà été utilisé. Demande-en un nouveau.';
+  if (/access_denied|denied|cancel/i.test(desc + code)) return 'Connexion refusée ou annulée. Si Google affiche « accès bloqué », ajoute ton adresse dans les utilisateurs de test.';
+  return `Connexion impossible : ${desc || code}`;
 }
 
 // Propose un pseudo à partir du profil Google / Discord / GitHub

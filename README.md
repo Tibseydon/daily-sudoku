@@ -51,23 +51,20 @@ Pour le Laser, clique sur une case vide pour viser sa ligne, puis reclique sur l
 
 > La clé publique est faite pour être visible dans le code du site. La sécurité repose sur les règles RLS du schéma : un joueur ne peut rien écrire directement. Le chrono, les pénalités et la vérification de la grille sont gérés par le serveur.
 
-### Connexion Google, Discord et GitHub
+### Connexion avec Google
 
-Chaque bouton n'apparaît sur le site que lorsque le fournisseur est activé dans Supabase (**Authentication → Sign In / Providers**). Pour chacun, il faut créer une « application OAuth » chez le fournisseur avec cette **URL de redirection (callback)** :
+Le bouton « Continuer avec Google » n'apparaît que lorsque Google est activé dans Supabase (**Authentication → Sign In / Providers → Google**).
 
-```
-https://yirqnldregtrbigwdmid.supabase.co/auth/v1/callback
-```
+1. Dans la [Google Cloud Console](https://console.cloud.google.com), ouvre **Google Auth Platform** (ou *APIs & Services*) et configure l'écran de consentement (*External*).
+2. Ouvre ensuite **Clients → Create client → Web application** et renseigne :
+   - *Authorized JavaScript origins* : `https://tibseydon.github.io` ;
+   - *Authorized redirect URIs* : `https://yirqnldregtrbigwdmid.supabase.co/auth/v1/callback`.
+3. Colle le *Client ID* (`….apps.googleusercontent.com`) et le *Client Secret* (`GOCSPX-…`) **du même client** dans le fournisseur Google de Supabase.
+4. Tant que l'app est en mode *Testing*, seuls les comptes listés dans **Audience → Test users** peuvent se connecter. Clique sur **Publish app** pour ouvrir la connexion à tout le monde.
 
-Colle ensuite le *Client ID* et le *Client Secret* obtenus dans le fournisseur correspondant de Supabase, puis active-le.
+À la première connexion, le joueur choisit son pseudo. Une suggestion est proposée à partir de son profil Google.
 
-| Fournisseur | Où créer l'application |
-|---|---|
-| **GitHub** | [github.com/settings/developers](https://github.com/settings/developers) → *New OAuth App*. Homepage : `https://tibseydon.github.io/daily-sudoku/`. Callback : l'URL ci-dessus. *Generate a new client secret*. |
-| **Discord** | [discord.com/developers/applications](https://discord.com/developers/applications) → *New Application* → *OAuth2* → *Add Redirect* : l'URL ci-dessus. Copie *Client ID* et *Client Secret*. |
-| **Google** | [console.cloud.google.com](https://console.cloud.google.com) → *APIs & Services* → *OAuth consent screen* (External), puis *Credentials* → *Create credentials* → *OAuth client ID* → *Web application*. *Authorized JavaScript origins* : `https://tibseydon.github.io`. *Authorized redirect URIs* : l'URL ci-dessus. |
-
-À la première connexion par l'un de ces fournisseurs, le joueur choisit son pseudo (une suggestion est proposée à partir de son profil).
+> L'erreur « Unable to exchange external code » signifie que Google refuse le *Client Secret* enregistré dans Supabase, ou que le Client ID et le secret ne viennent pas du même client.
 
 ### Sécurité des mots de passe (inscription par email)
 

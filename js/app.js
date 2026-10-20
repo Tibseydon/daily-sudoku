@@ -869,7 +869,7 @@
     buildNumpad();
     setupAuth();
     try { user = await backend.init(); } catch (e) { UI.toast(e.message, 'error'); }
-    if (backend.urlError) $('#authError').textContent = backend.urlError;
+    if (backend.urlError) { $('#authError').textContent = backend.urlError; UI.toast(backend.urlError, 'error'); }
     if (user && backend.recovery) {
       // Arrivée par le lien "mot de passe oublié" : on impose le choix d'un nouveau mot de passe
       inRecovery = true;
