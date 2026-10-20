@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sudoku du Jour</title>
+  <meta name="description" content="Chaque jour, 4 nouvelles grilles de sudoku, du facile à l'extrême. Défie les autres joueurs et collectionne les médailles !">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='24' fill='%23d55181'/><text x='50' y='72' font-size='64' text-anchor='middle' fill='white' font-family='Arial' font-weight='bold'>9</text></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="blobs" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
+
+  <header class="topbar">
+    <button class="brand" data-view="home" aria-label="Accueil">
+      <span class="logo"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>
+      <span class="brand-text">Sudoku <b>du Jour</b></span>
+    </button>
+    <nav class="nav" id="nav">
+      <button data-view="home"><span>🏠</span><em>Aujourd'hui</em></button>
+      <button data-view="leaderboard"><span>🏆</span><em>Classement</em></button>
+      <button data-view="history"><span>📈</span><em>Historique</em></button>
+      <button data-view="rules"><span>📖</span><em>Règles</em></button>
+    </nav>
+    <div class="userbox" id="userBox"></div>
+  </header>
+
+  <div class="demo-banner hidden" id="demoBanner">
+    🧪 <b>Mode démo</b> : tes scores restent dans ce navigateur et tes adversaires sont simulés.
+    Configure Supabase (voir README) pour le vrai classement.
+  </div>
+
+  <main>
+    <!-- Connexion -->
+    <section class="view" id="view-auth">
+      <div class="auth-card glass">
+        <div class="auth-hero">
+          <div class="mini-board" aria-hidden="true"></div>
+          <h1>Une nouvelle grille<br><span class="rainbow">chaque jour</span></h1>
+          <p>4 niveaux, du 🌱 facile au 💀 extrême. Sois le plus rapide et décroche les trophées !</p>
+        </div>
+        <form id="authForm" class="auth-form" autocomplete="on">
+          <div class="tabs" id="authTabs">
+            <button type="button" data-tab="signin" class="active">Connexion</button>
+            <button type="button" data-tab="signup">Créer un compte</button>
+          </div>
+          <label class="field" data-only="signup demo"><span>Pseudo</span>
+            <input name="pseudo" minlength="3" maxlength="20" placeholder="SudoMaster" autocomplete="nickname"></label>
+          <label class="field" data-only="signin signup"><span>Email</span>
+            <input name="email" type="email" placeholder="toi@exemple.fr" autocomplete="email"></label>
+          <label class="field" data-only="signin signup"><span>Mot de passe</span>
+            <input name="password" type="password" minlength="6" placeholder="••••••••" autocomplete="current-password"></label>
+          <p class="form-error" id="authError" role="alert"></p>
+          <button class="btn btn-primary btn-lg" type="submit" id="authSubmit">C'est parti ! 🚀</button>
+        </form>
+      </div>
+    </section>
+
+    <!-- Accueil -->
+    <section class="view" id="view-home">
+      <div class="home-head">
+        <div>
+          <p class="eyebrow" id="homeDate"></p>
+          <h2 id="homeHello">Bonjour 👋</h2>
+        </div>
+        <div class="home-meta glass">
+          <div><small>Grilles terminées</small><b id="homeProgress">0/4</b></div>
+          <div><small>Nouvelles grilles dans</small><b id="homeCountdown">--:--:--</b></div>
+        </div>
+      </div>
+      <div class="level-grid" id="levelCards"></div>
+    </section>
+
+    <!-- Jeu -->
+    <section class="view" id="view-game">
+      <div class="game-layout">
+        <div class="game-main">
+          <div class="game-head">
+            <button class="btn btn-ghost" data-view="home" aria-label="Retour à l'accueil">←<span class="hide-sm">&nbsp;Retour</span></button>
+            <div class="level-chip" id="gameLevel"></div>
+            <div class="timer" id="timer" aria-live="off">
+              <span class="timer-icon">⏱</span><b id="timerValue">00:00</b>
+              <small id="timerPenalty"></small>
+            </div>
+          </div>
+          <div class="board-wrap">
+            <div class="board" id="board" role="grid" aria-label="Grille de sudoku"></div>
+            <div class="board-loading hidden" id="boardLoading"><div class="spinner"></div><p>Génération de la grille…</p></div>
+          </div>
+          <div class="target-bar hidden" id="targetBar">
+            <p id="targetMsg"></p>
+            <div class="target-actions">
+              <button class="btn btn-ghost" id="targetCancel">Annuler</button>
+              <button class="btn btn-primary" id="targetConfirm" disabled>Révéler</button>
+            </div>
+          </div>
+          <div class="done-bar hidden" id="doneBar"></div>
+          <div class="numpad" id="numpad"></div>
+          <div class="tools">
+            <button class="tool" id="toolNotes" aria-pressed="false">✏️ <span>Notes</span> <kbd>N</kbd></button>
+            <button class="tool" id="toolErase">🧽 <span>Effacer</span></button>
+          </div>
+        </div>
+        <aside class="game-side">
+          <div class="glass hints-card">
+            <h3>💡 Indices <small>(du temps est ajouté au chrono)</small></h3>
+            <div class="hints" id="hints"></div>
+          </div>
+          <div class="glass tips-card">
+            <p>⌨️ Clavier : <kbd>1</kbd>–<kbd>9</kbd> pour écrire, <kbd>⌫</kbd> pour effacer, flèches pour bouger, <kbd>N</kbd> pour les notes.</p>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <!-- Classement -->
+    <section class="view" id="view-leaderboard">
+      <div class="section-head">
+        <h2>🏆 Classement du jour</h2>
+        <input type="date" id="lbDate" class="date-input" aria-label="Date du classement">
+      </div>
+      <div class="pills" id="lbLevels"></div>
+      <p class="muted small" id="lbNote"></p>
+      <div class="podium" id="podium"></div>
+      <div class="glass table-card">
+        <table class="table" id="lbTable">
+          <thead><tr><th>#</th><th>Médaille</th><th>Joueur</th><th class="num">Score</th><th class="num hide-sm">Temps</th><th class="num hide-sm">Pénalités</th></tr></thead>
+          <tbody></tbody>
+        </table>
+        <p class="empty hidden" id="lbEmpty">Personne n'a encore terminé cette grille. Sois le premier ! 🚀</p>
+      </div>
+    </section>
+
+    <!-- Historique -->
+    <section class="view" id="view-history">
+      <div class="section-head"><h2>📈 Mon historique</h2></div>
+      <div class="stats" id="stats"></div>
+      <div class="glass cabinet-card">
+        <h3>🎖️ Ma vitrine</h3>
+        <div class="cabinet" id="cabinet"></div>
+      </div>
+      <div class="glass chart-card">
+        <div class="chart-head">
+          <h3 id="chartTitle">Évolution de mon score</h3>
+          <div class="seg" id="chartMetric">
+            <button data-metric="time" class="active">Score</button>
+            <button data-metric="pct">Classement (top %)</button>
+          </div>
+        </div>
+        <div class="pills small-pills" id="chartLevels"></div>
+        <div class="chart" id="chart"></div>
+      </div>
+      <div class="glass table-card">
+        <table class="table" id="histTable">
+          <thead><tr><th>Date</th><th>Niveau</th><th class="num">Score</th><th class="num hide-sm">Pénalités</th><th class="num">Rang</th><th>Récompense</th></tr></thead>
+          <tbody></tbody>
+        </table>
+        <p class="empty hidden" id="histEmpty">Pas encore de partie terminée. Lance ta première grille ! 🌱</p>
+      </div>
+    </section>
+
+    <!-- Règles -->
+    <section class="view" id="view-rules">
+      <div class="section-head"><h2>📖 Règles du jeu</h2></div>
+      <div class="rules-grid">
+        <div class="glass rule-card">
+          <h3>🗓️ Le principe</h3>
+          <p>Chaque jour à minuit (heure de Paris), <b>4 nouvelles grilles</b> apparaissent : une par niveau, identiques pour tous les joueurs.</p>
+          <p>Remplis chaque ligne, chaque colonne et chaque carré 3×3 avec les chiffres de 1 à 9. Ton <b>score</b> = temps de résolution + pénalités d'indices. Plus il est bas, mieux c'est !</p>
+          <p>⚠️ Le chrono démarre à l'ouverture de la grille et ne s'arrête pas si tu quittes la page.</p>
+        </div>
+        <div class="glass rule-card">
+          <h3>🏆 Trophées du jour</h3>
+          <p>Les 4 meilleurs scores de chaque niveau remportent un trophée :</p>
+          <div class="rule-rewards" id="rulesTrophies"></div>
+        </div>
+        <div class="glass rule-card">
+          <h3>🎖️ Médailles</h3>
+          <p>Chaque joueur qui termine une grille gagne une médaille selon son classement :</p>
+          <div class="rule-rewards" id="rulesMedals"></div>
+          <p class="muted small">Les médailles du jour sont provisoires jusqu'à minuit : elles évoluent quand d'autres joueurs terminent.</p>
+        </div>
+        <div class="glass rule-card">
+          <h3>💡 Indices</h3>
+          <div id="rulesHints"></div>
+          <p class="muted small">📏 Laser : clique sur une case vide pour cibler sa ligne, reclique dessus pour passer à la colonne (et inversement).</p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <div class="modal hidden" id="modal" role="dialog" aria-modal="true">
+    <div class="modal-card glass" id="modalCard"></div>
+  </div>
+  <div class="toast" id="toast" role="status"></div>
+  <canvas id="confetti" aria-hidden="true"></canvas>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.js"></script>
+  <script src="js/config.js"></script>
+  <script src="js/rules.js"></script>
+  <script src="js/sudoku.js"></script>
+  <script src="js/backend.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
