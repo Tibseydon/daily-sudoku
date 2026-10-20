@@ -110,7 +110,17 @@ supabase/migrations/  Mises à jour à appliquer sur une base existante
 
 ## ⚙️ Fonctionnement
 
-- **Grilles du jour** : générées par une graine `date + niveau`, donc tout le monde reçoit la même grille. La première version enregistrée en base fait foi pour la journée. Toutes les grilles ont une solution unique. Les niveaux 1 et 2 se résolvent avec les techniques de base. Le niveau 4 a le minimum d'indices possible (environ 22 à 25).
+- **Grilles du jour** : générées par une graine `date + niveau`, donc tout le monde reçoit la même grille. La première version enregistrée en base fait foi pour la journée.
+- **Toujours faisables sans indice** : un solveur « humain » (`Sudoku.logicSolve`) n'accepte une grille que s'il la résout entièrement par déduction, sans jamais deviner. Une grille résolue ainsi a forcément une solution unique.
+
+  | Niveau | Indices | Techniques nécessaires |
+  |---|---|---|
+  | 🌱 Facile | 40 | singletons uniquement |
+  | 🌊 Moyen | 30 | singletons, parfois candidats verrouillés |
+  | 🔥 Difficile | ~26 | candidats verrouillés, paires et triplets |
+  | 💀 Extrême | 22 à 29 | jusqu'aux X-Wing, Swordfish et XY-Wing, mais jamais au hasard |
+
+  Testé sur 365 jours × 4 niveaux : 100 % des grilles ont une solution unique et sont résolues par logique, et la génération prend moins de 0,2 s.
 - **Chrono** : il démarre côté serveur à l'ouverture de la grille et continue même si on quitte la page. On ne peut faire qu'une partie par grille.
 - **Médailles du jour** : elles sont provisoires et évoluent jusqu'à minuit, au fur et à mesure que d'autres joueurs terminent.
 - Les quotas et pénalités des indices sont définis à deux endroits, `js/rules.js` et la fonction `use_hint` de `schema.sql`. Il faut les modifier ensemble.
